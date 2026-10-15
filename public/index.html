@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Makers and Takers</title>
+<style>
+:root{--felt:#14372c;--felt2:#1d4a3b;--paper:#fbfaf6;--ink:#1b1f1c;--red:#c4302b;--brass:#d9a441;--mute:#6b7a72;--line:#d9d6ca}
+*{box-sizing:border-box}
+body{margin:0;background:var(--felt);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+h1,h2,h3{font-family:Georgia,'Times New Roman',serif;margin:0}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+.panel{background:var(--paper);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.light{color:#e8efe9}
+input,button{font:inherit;padding:9px 12px;border-radius:7px;border:1px solid var(--line)}
+input{background:#fff;width:100%}
+button{cursor:pointer;background:var(--ink);color:#fff;border-color:var(--ink)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--brass)}
+button.alt{background:#fff;color:var(--ink);border-color:var(--ink)}
+button.buy{background:#1f6b46;border-color:#1f6b46}button.sell{background:var(--red);border-color:var(--red)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.card{width:92px;height:128px;border-radius:9px;background:#fff;border:2px solid var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 44px Georgia,serif;flex:none}
+.card small{font-size:30px;font-weight:400}.red{color:var(--red)}
+table{border-collapse:collapse;width:100%}th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}th{font-weight:600;color:var(--mute)}
+.ord{display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid var(--line);cursor:pointer}
+.ord.mine{background:#fff4d6;cursor:default}.ord:not(.mine):hover{background:#eef5ef}
+.bid b{color:#1f6b46}.ask b{color:var(--red)}
+.timer{font:700 34px Georgia,serif}.mute{color:var(--mute)}.pos{color:#1f6b46}.neg{color:var(--red)}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;display:none;max-width:90vw}
+.scroll{overflow-x:auto}.tape{max-height:200px;overflow:auto}
+</style></head><body><div class="wrap">
+<div id="home" class="panel" style="max-width:420px;margin:8vh auto 0">
+  <h1>Makers and Takers</h1>
+  <p class="mute">A 3-minute open-outcry trading game for 4-6 players per group.</p>
+  <p><input id="name" placeholder="Your name" maxlength="14"></p>
+  <p><button id="create" style="width:100%">Create a room</button></p>
+  <p class="mute" style="text-align:center;margin:8px 0">or join friends</p>
+  <div class="row"><input id="code" placeholder="Room code" maxlength="4" style="flex:1;text-transform:uppercase"><button id="join" class="alt">Join</button></div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="row light" style="justify-content:space-between;margin-bottom:12px">
+    <h2>Room <span id="rc"></span> <span class="mute" style="font-size:14px;font-family:system-ui">round <span id="rn">0</span></span></h2>
+    <button class="alt" id="share">Copy invite link</button>
+  </div>
+
+  <div id="lobby" class="panel">
+    <h3 id="lobbyT">Waiting to start</h3>
+    <p id="players" class="mute"></p>
+    <p class="mute">Rounds last 3 minutes. Everyone connected is split into groups of 4-6 (so 7 players can't split; 4-6 or 8+ work).</p>
+    <button id="start">Start round</button>
+  </div>
+
+  <div id="game" style="display:none">
+    <div class="panel row" style="gap:18px">
+      <div id="mycard" class="card"></div>
+      <div style="flex:1;min-width:200px">
+        <div class="timer" id="clock"></div>
+        <div id="role"></div>
+        <p>Position <b id="pos"></b> &nbsp; Cash <b id="cash"></b></p>
+        <div class="mute" id="grp"></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="panel">
+        <h3>Shout a price</h3>
+        <div class="row" style="margin:10px 0">
+          <label>Price <input id="px" type="number" min="0" max="20" value="12" style="width:80px"></label>
+          <label>Size <input id="qty" type="number" min="1" max="20" value="1" style="width:70px"></label>
+        </div>
+        <div class="row"><button class="buy" id="bid">Bid (buy)</button><button class="sell" id="ask">Offer (sell)</button></div>
+        <p class="mute" style="margin-bottom:0">Tap anyone's bid or offer below to trade 1 contract with them. Prices are whole numbers 0-20.</p>
+      </div>
+      <div class="panel"><h3>Trades</h3><div class="tape" id="tape"></div></div>
+    </div>
+    <div class="grid">
+      <div class="panel bid"><h3>Bids</h3><div id="bids"></div></div>
+      <div class="panel ask"><h3>Offers</h3><div id="asks"></div></div>
+    </div>
+  </div>
+
+  <div id="results" class="panel" style="display:none"></div>
+  <div class="panel scroll"><h3>Scoreboard</h3><div id="board"></div></div>
+</div>
+<div id="toast"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>(n>0?'+':'')+n, cls=n=>n>0?'pos':n<0?'neg':'';
+const ROLE={J:'Jack: +2 per contract you are short (up to 4)',Q:'Queen: +3 per contract you are short (up to 2)',K:'King: +3 per contract you are long (up to 2)',A:'Ace: +2 per contract you are long (up to 4)'};
+let ws,S,off=0,pid=localStorage.pid,tt;
+function send(m){if(ws&&ws.readyState===1)ws.send(JSON.stringify(m))}
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(tt);tt=setTimeout(()=>e.style.display='none',3500)}
+function connect(){
+  ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
+  ws.onopen=()=>{const q=new URLSearchParams(location.search).get('room');
+    if(localStorage.room&&pid&&(!q||q.toUpperCase()===localStorage.room))send({type:'join',code:localStorage.room,pid,name:localStorage.name});
+    else if(q)$('code').value=q.toUpperCase()};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type==='joined'){pid=m.pid;localStorage.pid=pid;localStorage.room=m.code}
+    else if(m.type==='error'){toast(m.msg);if(m.gone){localStorage.removeItem('room');localStorage.removeItem('pid');pid=null}}
+    else if(m.type==='state'){S=m;off=m.now-Date.now();render()}};
+  ws.onclose=()=>setTimeout(connect,1500);
+}
+setInterval(()=>send({type:'ping'}),25000);
+function go(type){const name=$('name').value.trim();if(!name&&!pid)return toast('Enter your name first.');
+  localStorage.name=name;send({type,name,code:$('code').value,pid:null})}
+$('create').onclick=()=>go('create');$('join').onclick=()=>go('join');
+$('start').onclick=()=>send({type:'start'});
+$('bid').onclick=()=>send({type:'order',side:'b',price:$('px').value,qty:$('qty').value});
+$('ask').onclick=()=>send({type:'order',side:'s',price:$('px').value,qty:$('qty').value});
+$('share').onclick=()=>{navigator.clipboard.writeText(location.origin+'/?room='+S.code);toast('Invite link copied.')};
+$('name').value=localStorage.name||'';
+function book(el,rows,side){
+  el.innerHTML=rows.length?rows.map(o=>`<div class="ord ${o.mine?'mine':''}" data-id="${o.id}" data-p="${o.price}" data-s="${side}"><span>${o.qty} @ <b>${o.price}</b></span><span>${o.mine?'you <u data-x="1">cancel</u>':esc(o.name)}</span></div>`).join(''):'<span class="mute">None</span>';
+}
+document.addEventListener('click',e=>{const r=e.target.closest('.ord');if(!r)return;
+  if(e.target.dataset.x)return send({type:'cancel',id:+r.dataset.id});
+  if(r.classList.contains('mine'))return;
+  send({type:'order',side:r.dataset.s==='b'?'s':'b',price:r.dataset.p,qty:1})});
+function render(){
+  $('home').style.display='none';$('app').style.display='block';
+  $('rc').textContent=S.code;$('rn').textContent=S.round;
+  const t=S.phase==='trading';
+  $('lobby').style.display=S.phase==='trading'?'none':'block';
+  $('lobbyT').textContent=S.phase==='lobby'?'Waiting to start':'Round '+S.round+' is over';
+  $('players').textContent='In the room: '+S.lobby.map(p=>p.name+(p.on?'':' (offline)')).join(', ');
+  $('start').style.display=S.host?'':'none';
+  $('start').textContent=S.phase==='lobby'?'Start round 1':'Start round '+(S.round+1);
+  $('game').style.display=t&&S.group?'block':'none';
+  if(t&&!S.group){$('lobby').style.display='block';$('lobbyT').textContent='Round '+S.round+' is in progress. You will be dealt in next round.';$('start').style.display='none'}
+  if(t&&S.group&&S.my){const c=S.my.card,red=['♥','♦'].includes(S.group.suit);
+    $('mycard').className='card'+(red?' red':'');$('mycard').innerHTML=esc(c)+'<small>'+S.group.suit+'</small>';
+    $('role').textContent=ROLE[c]||'Number card: no bonus. You help set the settlement price.';
+    $('pos').textContent=S.my.pos;$('pos').className=cls(S.my.pos);$('cash').textContent=S.my.cash;$('cash').className=cls(S.my.cash);
+    $('grp').textContent='Your group: '+S.group.names.join(', ');
+    book($('bids'),S.bids,'b');book($('asks'),S.asks,'s');
+    $('tape').innerHTML=S.trades.length?S.trades.map(x=>`<div class="ord" style="cursor:default"><span>${esc(x.b)} bought from ${esc(x.s)}</span><span>${x.q} @ <b>${x.p}</b></span></div>`).join(''):'<span class="mute">No trades yet</span>'}
+  const R=$('results');
+  if(S.phase==='results'&&S.results){const r=S.results;R.style.display='block';
+    R.innerHTML=`<h3>Round ${S.round} results</h3><p>Contracts settled at <b>${r.settle}</b>: twice the median of the number cards dealt [${r.others.join(', ')||'none'}]${r.others.length?'':' (no number cards, so it settles to 12)'}.</p>
+    <div class="scroll"><table><tr><th>Player</th><th>Card</th><th>Position</th><th>Cash</th><th>Bonus</th><th>PnL</th><th>Counts (cap 30)</th></tr>
+    ${r.rows.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.card)}</td><td>${x.pos}</td><td>${x.cash}</td><td>${x.bonus}</td><td class="${cls(x.pnl)}">${fmt(x.pnl)}</td><td><b>${fmt(x.capped)}</b></td></tr>`).join('')}</table></div>`}
+  else R.style.display='none';
+  const n=S.round;
+  $('board').innerHTML=`<table><tr><th>Player</th>${Array.from({length:n},(_,i)=>`<th>R${i+1}</th>`).join('')}<th>Total PnL</th><th>Score</th></tr>
+  ${S.board.map(p=>`<tr><td>${esc(p.name)}${p.name===S.me?' (you)':''}${p.on?'':' <span class="mute">offline</span>'}</td>
+  ${Array.from({length:n},(_,i)=>{const x=p.rounds[i];return x?`<td class="${cls(x.pnl)}" title="Counted: ${x.capped}">${fmt(x.pnl)}${x.pnl!==x.capped?' → '+x.capped:''}</td>`:'<td class="mute">–</td>'}).join('')}
+  <td class="${cls(p.total)}">${fmt(p.total)}</td><td><b>${p.score}</b></td></tr>`).join('')}</table>
+  <p class="mute" style="margin-bottom:0">Round columns show raw PnL (and the capped value that counts toward Score). Score = sum of capped round PnL.</p>`;
+}
+setInterval(()=>{if(S&&S.phase==='trading'){const s=Math.max(0,Math.round((S.endsAt-(Date.now()+off))/1000));$('clock').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}},250);
+connect();
+</script></body></html>
