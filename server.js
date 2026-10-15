@@ -72,7 +72,7 @@ function endRound(room) {
     const rows = ps.map(p => {
       const sh = Math.max(-p.pos, 0), lg = Math.max(p.pos, 0);
       const bonus = { J: 2 * Math.min(sh, 4), Q: 3 * Math.min(sh, 2), K: 3 * Math.min(lg, 2), A: 2 * Math.min(lg, 4) }[p.card] || 0;
-      const pnl = p.cash + p.pos * settle + bonus, capped = Math.min(pnl, 30);
+      const pnl = p.cash + p.pos * settle + bonus, capped = Math.min(pnl, 60);
       p.score += capped; p.total += pnl; p.rounds[room.round - 1] = { pnl, capped };
       return { name: p.name, card: p.card, pos: p.pos, cash: p.cash, bonus, pnl, capped };
     });
